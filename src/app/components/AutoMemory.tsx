@@ -1,409 +1,463 @@
-import { useState, useEffect } from 'react'
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts'
+import React, { useState, useEffect, useRef } from 'react'
 
-// Interfaz para representar una partición de memoria
-interface Partition {
-  id: number
-  size: number
-  allocated: boolean
-  user: string | null
-}
+const MemorySimulator: React.FC = () => {
+  const [memorySize, setMemorySize] = useState<number>(100)
+  const [instructions, setInstructions] = useState<
+    { name: string; size: number; time: number; start: number; end: number }[]
+  >([])
+  const [waitingInstructions, setWaitingInstructions] = useState<
+    { name: string; size: number; time: number }[]
+  >([])
+  const [maxOccupancy, setMaxOccupancy] = useState<number>(0)
+  const [currentOccupancy, setCurrentOccupancy] = useState<number>(0)
+  const [completedTasksCount, setCompletedTasksCount] = useState<number>(0)
+  const [completedTasksTotalSize, setCompletedTasksTotalSize] =
+    useState<number>(0)
+  const [simulationSize, setSimulationSize] = useState<number>(100)
+  const [timeStepsRemaining, setTimeStepsRemaining] = useState<number>(0)
+  const [instructionColors, setInstructionColors] = useState<{
+    [key: string]: string
+  }>({})
+  const animationTimer = useRef<NodeJS.Timeout | null>(null)
 
-// Interfaz para las propiedades del componente
-interface Props {
-  memoryLimit: number
-}
+  const [newInstruction, setNewInstruction] = useState<{
+    name: string
+    size: string
+    time: string
+  }>({
+    name: '',
+    size: '',
+    time: '',
+  })
 
-// Interfaz para representar una tarea en la cola
-interface QueueTask {
-  size: number
-  user: string
-}
+  const [memoryState, setMemoryState] = useState<boolean[]>([])
 
-// Clase que representa el administrador de memoria
-class MemoryManager {
-  private memoryLimit: number
-  private partitions: Partition[]
-  private nextPartitionId: number
+  useEffect(() => {
+    return () => {
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current)
+      }
+    }
+  }, [])
 
-  constructor(memoryLimit: number) {
-    this.memoryLimit = memoryLimit
-    this.partitions = []
-    this.nextPartitionId = 1
+  useEffect(() => {
+    setMemoryState(Array(memorySize).fill(false))
+  }, [memorySize])
 
-    // Inicializar con una partición libre que representa toda la memoria
-    this.partitions.push({
-      id: this.nextPartitionId++,
-      size: this.memoryLimit,
-      allocated: false,
-      user: null,
+  const handleInputChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ): void => {
+    setNewInstruction({
+      ...newInstruction,
+      [event.target.name]: event.target.value,
     })
   }
 
-  // Método para asignar memoria usando First-Fit
-  allocateFirstFit(size: number, user: string): boolean {
-    for (let i = 0; i < this.partitions.length; i++) {
-      const partition = this.partitions[i]
-      if (!partition.allocated && partition.size >= size) {
-        this.splitPartition(i, size, user)
-        return true
-      }
-    }
-    return false // No se encontró espacio
-  }
-
-  // Método para asignar memoria usando Best-Fit
-  allocateBestFit(size: number, user: string): boolean {
-    let bestFitIndex = -1
-    let bestFitSize = Infinity
-    for (let i = 0; i < this.partitions.length; i++) {
-      const partition = this.partitions[i]
-      if (
-        !partition.allocated &&
-        partition.size >= size &&
-        partition.size < bestFitSize
-      ) {
-        bestFitIndex = i
-        bestFitSize = partition.size
-      }
+  const addInstruction = (): void => {
+    const { name, size, time } = newInstruction
+    if (!name || isNaN(Number(size)) || isNaN(Number(time))) {
+      alert('Por favor, ingrese valores válidos para la instrucción.')
+      return
     }
 
-    if (bestFitIndex !== -1) {
-      this.splitPartition(bestFitIndex, size, user)
-      return true
+    const sizeInt = parseInt(size, 10)
+    const timeInt = parseInt(time, 10)
+
+    if (sizeInt > memorySize) {
+      alert(`La instrucción '${name}' excede el tamaño de la memoria.`)
+      return
     }
 
-    return false // No se encontró espacio
-  }
+    const start = findMemorySpace(sizeInt)
 
-  // Método para liberar una partición
-  deallocate(id: number): void {
-    const partitionIndex = this.partitions.findIndex(
-      (partition) => partition.id === id
-    )
+    if (start !== null) {
+      const end = start + sizeInt
+      setInstructions([
+        ...instructions,
+        { name, size: sizeInt, time: timeInt, start, end },
+      ])
+      setNewInstruction({ name: '', size: '', time: '' })
 
-    if (partitionIndex !== -1) {
-      this.partitions[partitionIndex].allocated = false
-      this.partitions[partitionIndex].user = null
-      this.mergeAdjacentFreePartitions()
-    }
-  }
-
-  // Método auxiliar para dividir una partición
-  private splitPartition(index: number, size: number, user: string): void {
-    const originalPartition = this.partitions[index]
-
-    this.partitions.splice(index, 1, {
-      id: originalPartition.id,
-      size: size,
-      allocated: true,
-      user,
-    })
-
-    if (originalPartition.size > size) {
-      this.partitions.splice(index + 1, 0, {
-        id: this.nextPartitionId++,
-        size: originalPartition.size - size,
-        allocated: false,
-        user: null,
+      // Actualizar memoryState
+      setMemoryState((prevMemoryState) => {
+        const updatedMemoryState = [...prevMemoryState]
+        for (let i = start; i < end; i++) {
+          updatedMemoryState[i] = true
+        }
+        return updatedMemoryState
       })
-    }
-  }
-
-  // Método auxiliar para fusionar particiones libres adyacentes
-  private mergeAdjacentFreePartitions(): void {
-    for (let i = 0; i < this.partitions.length - 1; i++) {
-      const currentPartition = this.partitions[i]
-      const nextPartition = this.partitions[i + 1]
-
-      if (!currentPartition.allocated && !nextPartition.allocated) {
-        this.partitions.splice(i, 2, {
-          id: currentPartition.id,
-          size: currentPartition.size + nextPartition.size,
-          allocated: false,
-          user: null,
-        })
-        i-- // Volver a verificar la partición fusionada
-      }
-    }
-  }
-
-  // Método para obtener todas las particiones
-  getPartitions(): Partition[] {
-    return this.partitions
-  }
-}
-
-// Componente React para el simulador de memoria dinámica
-const DynamicMemory: React.FC<Props> = ({ memoryLimit }) => {
-  const [memoryManager] = useState(new MemoryManager(memoryLimit))
-  const [partitions, setPartitions] = useState<Partition[]>(
-    memoryManager.getPartitions()
-  )
-  const [inputSize, setInputSize] = useState(0)
-  const [inputUser, setInputUser] = useState('')
-  const [allocationAlgorithm, setAllocationAlgorithm] = useState<
-    'first-fit' | 'best-fit'
-  >('first-fit')
-  const [taskQueue, setTaskQueue] = useState<QueueTask[]>([])
-  const [simulationRunning, setSimulationRunning] = useState(false)
-
-  // Referencias a los intervalos
-  let generateTaskInterval: NodeJS.Timeout
-  let allocateFromQueueInterval: NodeJS.Timeout
-  let deallocateInterval: NodeJS.Timeout
-
-  // Función para generar una nueva tarea
-  const generateNewTask = () => {
-    const newTaskSize = Math.floor(Math.random() * 200) + 50
-    const newUser = `Usuario ${Math.floor(Math.random() * 10) + 1}`
-    return { size: newTaskSize, user: newUser }
-  }
-
-  // Función para intentar asignar tareas de la cola
-  const allocateFromQueue = () => {
-    let queueCopy = [...taskQueue]
-    let newPartitions = [...partitions]
-
-    queueCopy.forEach((task, index) => {
-      let success = false
-      if (allocationAlgorithm === 'first-fit') {
-        success = memoryManager.allocateFirstFit(task.size, task.user)
-      } else {
-        success = memoryManager.allocateBestFit(task.size, task.user)
-      }
-
-      if (success) {
-        newPartitions = memoryManager.getPartitions()
-        queueCopy.splice(index, 1)
-      }
-    })
-
-    setTaskQueue(queueCopy)
-    setPartitions(newPartitions)
-  }
-
-  // Función para iniciar/detener la simulación
-  const toggleSimulation = () => {
-    setSimulationRunning((prevRunning) => {
-      if (prevRunning) {
-        // Detener la simulación
-        clearInterval(generateTaskInterval)
-        clearInterval(allocateFromQueueInterval)
-        clearInterval(deallocateInterval)
-      } else {
-        // Iniciar la simulación
-        generateTaskInterval = setInterval(() => {
-          const newTask = generateNewTask()
-          setTaskQueue((prevQueue) => [...prevQueue, newTask])
-        }, 5000)
-
-        allocateFromQueueInterval = setInterval(() => {
-          allocateFromQueue()
-        }, 2000)
-
-        deallocateInterval = setInterval(() => {
-          const allocatedPartitions = partitions.filter(
-            (partition) => partition.allocated
-          )
-          if (allocatedPartitions.length > 0) {
-            const randomIndex = Math.floor(
-              Math.random() * allocatedPartitions.length
-            )
-            memoryManager.deallocate(allocatedPartitions[randomIndex].id)
-            setPartitions(memoryManager.getPartitions())
-          }
-        }, 7000)
-      }
-      return !prevRunning
-    })
-  }
-
-  // Función para manejar la asignación de memoria manual
-  const handleAllocateMemory = () => {
-    if (inputSize <= 0 || inputUser.trim() === '') return
-
-    let success = false
-    if (allocationAlgorithm === 'first-fit') {
-      success = memoryManager.allocateFirstFit(inputSize, inputUser)
     } else {
-      success = memoryManager.allocateBestFit(inputSize, inputUser)
-    }
-
-    if (success) {
-      setPartitions(memoryManager.getPartitions())
-      setInputSize(0)
-      setInputUser('')
-    } else {
-      alert(
-        'No hay suficiente memoria disponible. La tarea se agregó a la cola.'
-      )
-      setTaskQueue((prevQueue) => [
-        ...prevQueue,
-        { size: inputSize, user: inputUser },
+      setWaitingInstructions([
+        ...waitingInstructions,
+        { name, size: sizeInt, time: timeInt },
       ])
     }
   }
 
-  // Función para manejar la liberación de memoria
-  const handleDeallocateMemory = (id: number) => {
-    memoryManager.deallocate(id)
-    setPartitions(memoryManager.getPartitions())
+  const findMemorySpace = (size: number): number | null => {
+    let freeSpaceStart: number | null = null
+    let freeSpaceLength = 0
+
+    for (let i = 0; i < memorySize; i++) {
+      if (memoryState[i] === false) {
+        // Revisar si el espacio está libre
+        if (freeSpaceStart === null) {
+          freeSpaceStart = i
+        }
+        freeSpaceLength++
+        if (freeSpaceLength === size) {
+          return freeSpaceStart
+        }
+      } else {
+        freeSpaceStart = null
+        freeSpaceLength = 0
+      }
+    }
+
+    return null
   }
 
-  // Calcular el total de memoria utilizada
-  const totalUsedMemory = partitions.reduce(
-    (acc, partition) => acc + (partition.allocated ? partition.size : 0),
-    0
-  )
+  const advanceTime = (): void => {
+    const completedInstructions = instructions.filter(
+      (instruction) => --instruction.time <= 0
+    )
 
-  // Datos para el gráfico de área
-  const chartData = partitions.map((partition, index) => ({
-    name: `Locación ${index + 1}`,
-    size: partition.size,
-    allocated: partition.allocated ? 1 : 0,
-    user: partition.user,
-  }))
+    setInstructions(
+      instructions.map((instruction) => {
+        if (instruction.time > 0) {
+          return { ...instruction, time: instruction.time - 1 }
+        }
+        return instruction
+      })
+    )
+
+    completedInstructions.forEach((instruction) => {
+      setCompletedTasksCount((prev) => prev + 1)
+      setCompletedTasksTotalSize((prev) => prev + instruction.size)
+
+      // Liberar espacio en memoryState
+      setMemoryState((prevMemoryState) => {
+        const updatedMemoryState = [...prevMemoryState]
+        for (let i = instruction.start; i < instruction.end; i++) {
+          updatedMemoryState[i] = false
+        }
+        return updatedMemoryState
+      })
+    })
+
+    retryAddingInstructions()
+    updateOccupancy()
+  }
+
+  const startSimulation = (): void => {
+    setTimeStepsRemaining(simulationSize)
+
+    if (animationTimer.current) {
+      clearTimeout(animationTimer.current)
+    }
+
+    animationTimer.current = setTimeout(runSimulationStep, 1000)
+  }
+
+  const runSimulationStep = (): void => {
+    if (timeStepsRemaining > 0) {
+      advanceTime()
+      setTimeStepsRemaining((prev) => prev - 1)
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current)
+      }
+      animationTimer.current = setTimeout(runSimulationStep, 1000)
+    } else {
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current)
+      }
+    }
+  }
+
+  const retryAddingInstructions = (): void => {
+    setWaitingInstructions((prevWaiting) => {
+      const stillWaiting: { name: string; size: number; time: number }[] = []
+      const newInstructions = [...instructions]
+
+      prevWaiting.forEach((instruction) => {
+        const start = findMemorySpace(instruction.size)
+        if (start !== null) {
+          newInstructions.push({
+            ...instruction,
+            start,
+            end: start + instruction.size,
+          })
+
+          // Actualizar memoryState
+          setMemoryState((prevMemoryState) => {
+            const updatedMemoryState = [...prevMemoryState]
+            for (let i = start; i < start + instruction.size; i++) {
+              updatedMemoryState[i] = true
+            }
+            return updatedMemoryState
+          })
+        } else {
+          stillWaiting.push(instruction)
+        }
+      })
+
+      setInstructions(newInstructions)
+      return stillWaiting
+    })
+  }
+
+  const updateOccupancy = (): void => {
+    const occupied = instructions.reduce((sum, instr) => sum + instr.size, 0)
+    setCurrentOccupancy(occupied)
+    setMaxOccupancy(Math.max(maxOccupancy, occupied))
+  }
+
+  const removeInstruction = (index: number): void => {
+    const removed = instructions[index]
+    if (removed) {
+      setCompletedTasksCount((prev) => prev + 1)
+      setCompletedTasksTotalSize((prev) => prev + removed.size)
+      setInstructions((prev) => prev.filter((_, i) => i !== index))
+
+      // Liberar espacio en memoryState
+      setMemoryState((prevMemoryState) => {
+        const updatedMemoryState = [...prevMemoryState]
+        for (let i = removed.start; i < removed.end; i++) {
+          updatedMemoryState[i] = false
+        }
+        return updatedMemoryState
+      })
+    }
+  }
+
+  const clearMemory = (): void => {
+    setInstructions([])
+    setWaitingInstructions([])
+    setMaxOccupancy(0)
+    setCurrentOccupancy(0)
+    setCompletedTasksCount(0)
+    setCompletedTasksTotalSize(0)
+    setMemoryState(Array(memorySize).fill(false))
+  }
+
+  const getInstructionColor = (instructionName: string): string => {
+    if (!instructionColors[instructionName]) {
+      setInstructionColors((prevColors) => ({
+        ...prevColors,
+        [instructionName]: `rgb(${Math.floor(
+          Math.random() * 255
+        )}, ${Math.floor(Math.random() * 255)}, ${Math.floor(
+          Math.random() * 255
+        )})`,
+      }))
+    }
+    return instructionColors[instructionName]
+  }
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-2">
-        Simulador de Memoria Dinámica
-      </h2>
+    <div className="container mx-auto p-4">
+      <h1 className="text-3xl font-bold mb-4">Simulador de Memoria</h1>
 
-      {/* Controles de asignación */}
-      <div className="mb-4">
-        <input
-          type="number"
-          placeholder="Tamaño"
-          className="border p-2 mr-2 rounded bg-gray-800 text-gray-100 focus:outline-none focus:ring focus:border-blue-500"
-          value={inputSize}
-          onChange={(e) => setInputSize(parseInt(e.target.value, 10) || 0)}
-        />
-        <input
-          type="text"
-          placeholder="Usuario"
-          className="border p-2 mr-2 rounded bg-gray-800 text-gray-100 focus:outline-none focus:ring focus:border-blue-500"
-          value={inputUser}
-          onChange={(e) => setInputUser(e.target.value)}
-        />
-        <button
-          className="bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-900 mr-2"
-          onClick={handleAllocateMemory}
-        >
-          Asignar
-        </button>
-        <div className="inline-block">
-          <label htmlFor="algorithm" className="mr-2">
-            Algoritmo:
+      <div className="flex space-x-4 mb-4">
+        <div>
+          <label
+            htmlFor="memorySize"
+            className="block text-sm font-medium text-gray-700"
+          >
+            Tamaño de la memoria:
           </label>
-          <select
-            id="algorithm"
-            value={allocationAlgorithm}
-            onChange={(e) =>
-              setAllocationAlgorithm(e.target.value as 'first-fit' | 'best-fit')
-            }
-            className="border p-2 rounded bg-gray-800 text-gray-100 focus:outline-none focus:ring focus:border-blue-500"
-          >
-            <option value="first-fit">First-Fit</option>
-            <option value="best-fit">Best-Fit</option>
-          </select>
+          <input
+            type="number"
+            id="memorySize"
+            value={memorySize}
+            onChange={(e) => setMemorySize(parseInt(e.target.value, 10) || 0)}
+            className="mt-1 p-2 border rounded-md shadow-sm text-black focus:ring focus:ring-blue-200"
+          />
         </div>
-      </div>
-      {/* Información de la memoria */}
-      <p className="mb-2">
-        Límite de Memoria: {memoryLimit} - Memoria Usada: {totalUsedMemory}
-      </p>
-
-      {/* Lista de particiones */}
-      <ul className="space-y-2 mb-4">
-        {partitions.map((partition) => (
-          <li key={partition.id} className="border p-2 rounded">
-            Partición {partition.id} - Tamaño: {partition.size} - Estado:{' '}
-            {partition.allocated ? `Asignado a ${partition.user}` : 'Libre'}
-            {partition.allocated && (
-              <button
-                className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-700 ml-2"
-                onClick={() => handleDeallocateMemory(partition.id)}
-              >
-                Liberar
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {/* Representación visual de la memoria */}
-      <div className="flex space-x-4">
-        <div
-          className="border border-gray-400 w-48 relative"
-          style={{ height: `${memoryLimit}px` }}
-        >
-          {/* Sistema Operativo */}
-          <div
-            className="bg-green-500 text-white text-center font-bold"
-            style={{ height: `${partitions[0].size}px` }}
+        <div>
+          <label
+            htmlFor="simSize"
+            className="block text-sm font-medium text-gray-700"
           >
-            SO
-          </div>
+            Tamaño de la simulación:
+          </label>
+          <input
+            type="number"
+            id="simSize"
+            value={simulationSize}
+            onChange={(e) =>
+              setSimulationSize(parseInt(e.target.value, 10) || 0)
+            }
+            className="mt-1 p-2 border rounded-md text-black shadow-sm focus:ring focus:ring-blue-200"
+          />
+        </div>
+        <button
+          onClick={startSimulation}
+          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
+        >
+          Iniciar Simulación
+        </button>
+        <button
+          onClick={advanceTime}
+          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
+        >
+          Avanzar Tiempo
+        </button>
+        <button
+          onClick={clearMemory}
+          className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-200"
+        >
+          Limpiar Memoria
+        </button>
+      </div>
 
-          {/* Particiones */}
-          <div className="flex flex-col flex-grow">
-            {partitions.slice(1).map((partition, index) => (
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold mb-2">Agregar Instrucción</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label
+              htmlFor="name"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Nombre:
+            </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={newInstruction.name}
+              onChange={handleInputChange}
+              className="mt-1 p-2 border rounded-md shadow-sm text-black focus:ring focus:ring-blue-200 w-full"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="size"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Tamaño:
+            </label>
+            <input
+              type="number"
+              id="size"
+              name="size"
+              value={newInstruction.size}
+              onChange={handleInputChange}
+              className="mt-1 p-2 border rounded-md shadow-sm text-black focus:ring focus:ring-blue-200 w-full"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="time"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Tiempo:
+            </label>
+            <input
+              type="number"
+              id="time"
+              name="time"
+              value={newInstruction.time}
+              onChange={handleInputChange}
+              className="mt-1 p-2 border rounded-md shadow-sm text-black focus:ring focus:ring-blue-200 w-full"
+            />
+          </div>
+        </div>
+        <button
+          onClick={addInstruction}
+          className="px-4 py-2 mt-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring focus:ring-green-200"
+        >
+          Agregar
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold mb-2">Memoria</h2>
+        <div className="grid grid-cols-10 gap-2">
+          {[...Array(memorySize)].map((_, index) => {
+            const instructionAtSlot = instructions.find(
+              (instr) => index >= instr.start && index < instr.end
+            )
+
+            return (
               <div
-                key={partition.id}
-                className={`
-                  ${partition.allocated ? 'bg-orange-400' : 'bg-gray-300'} 
-                  text-white text-center font-bold 
-                  border-t border-gray-400 
-                  flex-grow
-                `}
+                key={index}
+                className="h-8 border"
                 style={{
-                  height: `${partition.size}px`,
-                  lineHeight: `${partition.size}px`,
+                  backgroundColor: instructionAtSlot
+                    ? getInstructionColor(instructionAtSlot.name)
+                    : '#ccc',
                 }}
               >
-                {partition.allocated ? partition.user : ''}
+                {instructionAtSlot && index === instructionAtSlot.start && (
+                  <span className="absolute text-xs text-white font-bold">
+                    {instructionAtSlot.name}
+                  </span>
+                )}
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
       </div>
 
-      {/* Mostrar la cola de tareas */}
-      <div className="mt-4">
-        <h3>Cola de Tareas:</h3>
-        <ul>
-          {taskQueue.map((task, index) => (
-            <li key={index}>
-              Tamaño: {task.size}, Usuario: {task.user}
-            </li>
-          ))}
-        </ul>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <h2 className="text-xl font-semibold mb-2">
+            Instrucciones en Memoria
+          </h2>
+          <ul>
+            {instructions.map((instruction, index) => (
+              <li key={index} className="border p-2 rounded-md mb-2">
+                {instruction.name}, Tamaño: {instruction.size}, Tiempo:{' '}
+                {instruction.time}, Inicio: {instruction.start}, Fin:{' '}
+                {instruction.end}
+                <button
+                  onClick={() => removeInstruction(index)}
+                  className="ml-2 px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-200 text-xs"
+                >
+                  Eliminar
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h2 className="text-xl font-semibold mb-2">
+            Instrucciones en Espera
+          </h2>
+          <ul>
+            {waitingInstructions.map((instruction, index) => (
+              <li key={index} className="border p-2 rounded-md mb-2">
+                {instruction.name}, Tamaño: {instruction.size}, Tiempo:{' '}
+                {instruction.time}
+                <button
+                  onClick={() => retryAddingInstructions()}
+                  className="ml-2 px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200 text-xs"
+                >
+                  Reintentar
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
-      {/* Botón para iniciar/detener la simulación */}
-      <button
-        className={`bg-${
-          simulationRunning ? 'red' : 'green'
-        }-500 text-white px-4 py-2 rounded hover:bg-${
-          simulationRunning ? 'red' : 'green'
-        }-700 mt-4`}
-        onClick={toggleSimulation}
-      >
-        {simulationRunning ? 'Detener Simulación' : 'Iniciar Simulación'}
-      </button>
+      <div className="mt-4">
+        <h2 className="text-xl font-semibold mb-2">Estadísticas</h2>
+        <p>
+          Ocupación máxima: {maxOccupancy} (
+          {((maxOccupancy / memorySize) * 100).toFixed(2)}%)
+        </p>
+        <p>
+          Ocupación actual: {currentOccupancy} (
+          {((currentOccupancy / memorySize) * 100).toFixed(2)}%)
+        </p>
+        <p>Tareas completadas: {completedTasksCount}</p>
+        <p>Tamaño total de tareas completadas: {completedTasksTotalSize}</p>
+      </div>
     </div>
   )
 }
 
-export default DynamicMemory
+export default MemorySimulator

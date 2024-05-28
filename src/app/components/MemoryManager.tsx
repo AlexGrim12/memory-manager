@@ -4,7 +4,7 @@ import { useState } from 'react'
 import SingleUserMemory from './SingleUserMemory'
 import MultiUserMemory from './MultiUserMemory'
 import DynamicMemory from './DynamicMemory'
-import AutoMemory from './AutoMemory'
+import MemorySimulator from './AutoMemory'
 
 const MemoryManager: React.FC = () => {
   const [simulationType, setSimulationType] = useState<string | null>(null)
@@ -19,7 +19,7 @@ const MemoryManager: React.FC = () => {
       case 'dynamic':
         return <DynamicMemory memoryLimit={memoryLimit} />
       case 'auto':
-        return <AutoMemory memoryLimit={memoryLimit} />
+        return <MemorySimulator />
       default:
         return (
           <p className="text-gray-300">
