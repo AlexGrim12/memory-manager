@@ -127,15 +127,16 @@ const MemorySimulator: React.FC = () => {
     }[] = []
 
     setInstructions((prevInstructions) => {
-      return prevInstructions
-        .map((instruction) => {
-          if (--instruction.time <= 0) {
-            completedInstructions.push(instruction) // Agrega la instrucción a la lista de completadas
-            return null // Devuelve null para eliminar la instrucción del arreglo
-          }
-          return { ...instruction, time: instruction.time }
-        })
-        .filter((instruction) => instruction !== null) // Filtra las instrucciones null del arreglo
+      const newInstructions = prevInstructions.map((instruction) => {
+        if (--instruction.time <= 0) {
+          completedInstructions.push(instruction) // Agrega la instrucción a la lista de completadas
+          return null // Devuelve null para eliminar la instrucción del arreglo
+        }
+        return { ...instruction, time: instruction.time }
+      })
+
+      // Filtra las instrucciones null del arreglo
+      return newInstructions.filter((instruction) => instruction !== null)
     })
 
     completedInstructions.forEach((instruction) => {
