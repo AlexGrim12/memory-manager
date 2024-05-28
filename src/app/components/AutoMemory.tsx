@@ -282,7 +282,7 @@ const MemorySimulator: React.FC = () => {
             className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700  focus:ring focus:ring-blue-200"
           />
         </div>
-        <div className="flex items-center gap-4">
+        {/* <div className="flex items-center gap-4">
           <label
             htmlFor="simSize"
             className="block text-sm font-medium text-white"
@@ -298,7 +298,7 @@ const MemorySimulator: React.FC = () => {
             }
             className="mt-1 p-2 border rounded-md bg-gray-700 shadow-sm focus:ring focus:ring-blue-200"
           />
-        </div>
+        </div> */}
         <div className="flex items-center gap-4">
           <button
             onClick={startSimulation}
@@ -321,7 +321,7 @@ const MemorySimulator: React.FC = () => {
         </div>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 mt-4">
         <h2 className="text-xl font-semibold mb-2">Agregar Instrucción</h2>
         <div className="grid grid-cols-3 gap-4">
           <div>
@@ -396,7 +396,7 @@ const MemorySimulator: React.FC = () => {
                 style={{
                   backgroundColor: instructionAtSlot
                     ? getInstructionColor(instructionAtSlot.name)
-                    : '#ccc',
+                    : '#081B37',
                 }}
               >
                 {instructionAtSlot && index === instructionAtSlot.start && (
