@@ -118,18 +118,26 @@ const MemorySimulator: React.FC = () => {
   }
 
   const advanceTime = (): void => {
-    const completedInstructions = instructions.filter(
-      (instruction) => --instruction.time <= 0
-    )
+    const completedInstructions: {
+      name: string
+      size: number
+      time: number
+      start: number
+      end: number
+    }[] = []
 
-    setInstructions(
-      instructions.map((instruction) => {
-        if (instruction.time > 0) {
-          return { ...instruction, time: instruction.time - 1 }
+    setInstructions((prevInstructions) => {
+      const newInstructions = prevInstructions.map((instruction) => {
+        if (--instruction.time <= 0) {
+          completedInstructions.push(instruction) // Agrega la instrucción a la lista de completadas
+          return null // Devuelve null para eliminar la instrucción del arreglo
         }
-        return instruction
+        return { ...instruction, time: instruction.time }
       })
-    )
+
+      // Filtra las instrucciones null del arreglo
+      return newInstructions.filter((instruction) => instruction !== null)
+    })
 
     completedInstructions.forEach((instruction) => {
       setCompletedTasksCount((prev) => prev + 1)
@@ -258,11 +266,11 @@ const MemorySimulator: React.FC = () => {
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-4">Simulador de Memoria</h1>
 
-      <div className="flex space-x-4 mb-4">
-        <div>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="flex items-center gap-4">
           <label
             htmlFor="memorySize"
-            className="block text-sm font-medium text-gray-700"
+            className="block text-sm font-medium text-white"
           >
             Tamaño de la memoria:
           </label>
@@ -271,13 +279,13 @@ const MemorySimulator: React.FC = () => {
             id="memorySize"
             value={memorySize}
             onChange={(e) => setMemorySize(parseInt(e.target.value, 10) || 0)}
-            className="mt-1 p-2 border rounded-md shadow-sm text-black focus:ring focus:ring-blue-200"
+            className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700  focus:ring focus:ring-blue-200"
           />
         </div>
-        <div>
+        <div className="flex items-center gap-4">
           <label
             htmlFor="simSize"
-            className="block text-sm font-medium text-gray-700"
+            className="block text-sm font-medium text-white"
           >
             Tamaño de la simulación:
           </label>
@@ -288,27 +296,29 @@ const MemorySimulator: React.FC = () => {
             onChange={(e) =>
               setSimulationSize(parseInt(e.target.value, 10) || 0)
             }
-            className="mt-1 p-2 border rounded-md text-black shadow-sm focus:ring focus:ring-blue-200"
+            className="mt-1 p-2 border rounded-md bg-gray-700 shadow-sm focus:ring focus:ring-blue-200"
           />
         </div>
-        <button
-          onClick={startSimulation}
-          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
-        >
-          Iniciar Simulación
-        </button>
-        <button
-          onClick={advanceTime}
-          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
-        >
-          Avanzar Tiempo
-        </button>
-        <button
-          onClick={clearMemory}
-          className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-200"
-        >
-          Limpiar Memoria
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={startSimulation}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
+          >
+            Iniciar Simulación
+          </button>
+          <button
+            onClick={advanceTime}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
+          >
+            Avanzar Tiempo
+          </button>
+          <button
+            onClick={clearMemory}
+            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-200"
+          >
+            Limpiar Memoria
+          </button>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -317,7 +327,7 @@ const MemorySimulator: React.FC = () => {
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-white"
             >
               Nombre:
             </label>
@@ -327,13 +337,13 @@ const MemorySimulator: React.FC = () => {
               name="name"
               value={newInstruction.name}
               onChange={handleInputChange}
-              className="mt-1 p-2 border rounded-md shadow-sm text-black focus:ring focus:ring-blue-200 w-full"
+              className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
             />
           </div>
           <div>
             <label
               htmlFor="size"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-white"
             >
               Tamaño:
             </label>
@@ -343,13 +353,13 @@ const MemorySimulator: React.FC = () => {
               name="size"
               value={newInstruction.size}
               onChange={handleInputChange}
-              className="mt-1 p-2 border rounded-md shadow-sm text-black focus:ring focus:ring-blue-200 w-full"
+              className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
             />
           </div>
           <div>
             <label
               htmlFor="time"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-white"
             >
               Tiempo:
             </label>
@@ -359,7 +369,7 @@ const MemorySimulator: React.FC = () => {
               name="time"
               value={newInstruction.time}
               onChange={handleInputChange}
-              className="mt-1 p-2 border rounded-md shadow-sm text-black focus:ring focus:ring-blue-200 w-full"
+              className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
             />
           </div>
         </div>
@@ -408,9 +418,15 @@ const MemorySimulator: React.FC = () => {
           <ul>
             {instructions.map((instruction, index) => (
               <li key={index} className="border p-2 rounded-md mb-2">
-                {instruction.name}, Tamaño: {instruction.size}, Tiempo:{' '}
-                {instruction.time}, Inicio: {instruction.start}, Fin:{' '}
-                {instruction.end}
+                <span className="text-white font-medium">
+                  {instruction.name}
+                </span>
+                <span className="text-white">
+                  , Tamaño: {instruction.size}, Tiempo: {instruction.time}
+                </span>
+                <span className="text-white">
+                  , Inicio: {instruction.start}, Fin: {instruction.end}
+                </span>
                 <button
                   onClick={() => removeInstruction(index)}
                   className="ml-2 px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-200 text-xs"
@@ -429,8 +445,12 @@ const MemorySimulator: React.FC = () => {
           <ul>
             {waitingInstructions.map((instruction, index) => (
               <li key={index} className="border p-2 rounded-md mb-2">
-                {instruction.name}, Tamaño: {instruction.size}, Tiempo:{' '}
-                {instruction.time}
+                <span className="text-white font-medium">
+                  {instruction.name}
+                </span>
+                <span className="text-white">
+                  , Tamaño: {instruction.size}, Tiempo: {instruction.time}
+                </span>
                 <button
                   onClick={() => retryAddingInstructions()}
                   className="ml-2 px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200 text-xs"
@@ -445,16 +465,22 @@ const MemorySimulator: React.FC = () => {
 
       <div className="mt-4">
         <h2 className="text-xl font-semibold mb-2">Estadísticas</h2>
-        <p>
-          Ocupación máxima: {maxOccupancy} (
-          {((maxOccupancy / memorySize) * 100).toFixed(2)}%)
-        </p>
-        <p>
-          Ocupación actual: {currentOccupancy} (
-          {((currentOccupancy / memorySize) * 100).toFixed(2)}%)
-        </p>
-        <p>Tareas completadas: {completedTasksCount}</p>
-        <p>Tamaño total de tareas completadas: {completedTasksTotalSize}</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p>
+              Ocupación máxima: {maxOccupancy} (
+              {((maxOccupancy / memorySize) * 100).toFixed(2)}%)
+            </p>
+            <p>
+              Ocupación actual: {currentOccupancy} (
+              {((currentOccupancy / memorySize) * 100).toFixed(2)}%)
+            </p>
+          </div>
+          <div>
+            <p>Tareas completadas: {completedTasksCount}</p>
+            <p>Tamaño total de tareas completadas: {completedTasksTotalSize}</p>
+          </div>
+        </div>
       </div>
     </div>
   )
