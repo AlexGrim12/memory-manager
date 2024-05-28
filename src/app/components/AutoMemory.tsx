@@ -155,6 +155,12 @@ const MemorySimulator: React.FC = () => {
     }
   }
 
+  const addMultipleRandomInstructions = (): void => {
+    for (let i = 0; i < 5; i++) {
+      addRandomInstruction()
+    }
+  }
+
   const findMemorySpace = (size: number): number | null => {
     let freeSpaceStart: number | null = null
     let freeSpaceLength = 0
@@ -334,6 +340,7 @@ const MemorySimulator: React.FC = () => {
     return instructionColors[instructionName]
   }
 
+  // Nuevo estado para la nueva instrucción
   const [newInstruction, setNewInstruction] = useState<{
     name: string
     size: string
@@ -343,6 +350,21 @@ const MemorySimulator: React.FC = () => {
     size: '',
     time: '',
   })
+
+  // Timer para agregar tareas aleatorias
+  const taskTimer = useRef<NodeJS.Timeout | null>(null)
+  const startAddingTasks = (): void => {
+    if (taskTimer.current) {
+      clearInterval(taskTimer.current)
+    }
+    taskTimer.current = setInterval(addMultipleRandomInstructions, 1000)
+  }
+
+  const stopAddingTasks = (): void => {
+    if (taskTimer.current) {
+      clearInterval(taskTimer.current)
+    }
+  }
 
   return (
     <div className="container mx-auto p-4">
@@ -388,6 +410,20 @@ const MemorySimulator: React.FC = () => {
             className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring focus:ring-green-200"
           >
             {showCreateTask ? 'Ocultar Crear Tarea' : 'Crear Tarea'}
+          </button>
+          {/* Botón para agregar 5 tareas aleatorias por segundo */}
+          <button
+            onClick={startAddingTasks}
+            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 focus:outline-none focus:ring focus:ring-yellow-200"
+          >
+            Agregar 5 Tareas/Segundo
+          </button>
+          {/* Botón para detener el flujo de tareas */}
+          <button
+            onClick={stopAddingTasks}
+            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-200"
+          >
+            Detener Tareas
           </button>
         </div>
       </div>
