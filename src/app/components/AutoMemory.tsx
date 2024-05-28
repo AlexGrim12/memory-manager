@@ -9,7 +9,7 @@ const MemorySimulator: React.FC = () => {
       time: number
       start: number
       end: number
-      memoryAddress: string // Dirección de memoria
+      memoryAddress: string
     }[]
   >([])
   const [waitingInstructions, setWaitingInstructions] = useState<
@@ -27,15 +27,8 @@ const MemorySimulator: React.FC = () => {
   }>({})
   const animationTimer = useRef<NodeJS.Timeout | null>(null)
 
-  const [newInstruction, setNewInstruction] = useState<{
-    name: string
-    size: string
-    time: string
-  }>({
-    name: '',
-    size: '',
-    time: '',
-  })
+  // Nuevo estado para el botón "Crear Tarea"
+  const [showCreateTask, setShowCreateTask] = useState(false)
 
   const [memoryState, setMemoryState] = useState<
     { occupied: boolean; instructionName: string | null }[]
@@ -50,7 +43,6 @@ const MemorySimulator: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    // Inicializar el estado de la memoria con espacio libre
     setMemoryState(
       Array(memorySize)
         .fill(null)
@@ -88,7 +80,7 @@ const MemorySimulator: React.FC = () => {
       const end = start + sizeInt
       const memoryAddress = `0x${start.toString(16)} - 0x${(end - 1).toString(
         16
-      )}` // Calcular dirección de memoria
+      )}`
       setInstructions([
         ...instructions,
         {
@@ -102,7 +94,6 @@ const MemorySimulator: React.FC = () => {
       ])
       setNewInstruction({ name: '', size: '', time: '' })
 
-      // Actualizar memoryState
       setMemoryState((prevMemoryState) => {
         const updatedMemoryState = [...prevMemoryState]
         for (let i = start; i < end; i++) {
@@ -115,6 +106,52 @@ const MemorySimulator: React.FC = () => {
         ...waitingInstructions,
         { name, size: sizeInt, time: timeInt },
       ])
+    }
+  }
+
+  const createRandomInstruction = (): {
+    name: string
+    size: number
+    time: number
+  } => {
+    const randomName = `Tarea ${Math.floor(Math.random() * 1000)}`
+    const randomSize = Math.floor(Math.random() * (memorySize / 3)) + 1
+    const randomTime = Math.floor(Math.random() * 100) + 1
+
+    return { name: randomName, size: randomSize, time: randomTime }
+  }
+
+  const addRandomInstruction = (): void => {
+    const newInstruction = createRandomInstruction()
+    const start = findMemorySpace(newInstruction.size)
+
+    if (start !== null) {
+      const end = start + newInstruction.size
+      const memoryAddress = `0x${start.toString(16)} - 0x${(end - 1).toString(
+        16
+      )}`
+      setInstructions([
+        ...instructions,
+        {
+          ...newInstruction,
+          start,
+          end,
+          memoryAddress,
+        },
+      ])
+
+      setMemoryState((prevMemoryState) => {
+        const updatedMemoryState = [...prevMemoryState]
+        for (let i = start; i < end; i++) {
+          updatedMemoryState[i] = {
+            occupied: true,
+            instructionName: newInstruction.name,
+          }
+        }
+        return updatedMemoryState
+      })
+    } else {
+      setWaitingInstructions([...waitingInstructions, newInstruction])
     }
   }
 
@@ -181,7 +218,6 @@ const MemorySimulator: React.FC = () => {
       setCompletedTasksCount((prev) => prev + 1)
       setCompletedTasksTotalSize((prev) => prev + instruction.size)
 
-      // Liberar espacio en memoryState
       freeMemorySpace(instruction.start, instruction.end)
     })
 
@@ -233,7 +269,6 @@ const MemorySimulator: React.FC = () => {
             memoryAddress,
           })
 
-          // Actualizar memoryState
           setMemoryState((prevMemoryState) => {
             const updatedMemoryState = [...prevMemoryState]
             for (let i = start; i < end; i++) {
@@ -267,7 +302,6 @@ const MemorySimulator: React.FC = () => {
       setCompletedTasksTotalSize((prev) => prev + removed.size)
       setInstructions((prev) => prev.filter((_, i) => i !== index))
 
-      // Liberar espacio en memoryState
       freeMemorySpace(removed.start, removed.end)
     }
   }
@@ -299,6 +333,16 @@ const MemorySimulator: React.FC = () => {
     }
     return instructionColors[instructionName]
   }
+
+  const [newInstruction, setNewInstruction] = useState<{
+    name: string
+    size: string
+    time: string
+  }>({
+    name: '',
+    size: '',
+    time: '',
+  })
 
   return (
     <div className="container mx-auto p-4">
@@ -339,68 +383,82 @@ const MemorySimulator: React.FC = () => {
           >
             Limpiar Memoria
           </button>
+          <button
+            onClick={() => setShowCreateTask(!showCreateTask)}
+            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring focus:ring-green-200"
+          >
+            {showCreateTask ? 'Ocultar Crear Tarea' : 'Crear Tarea'}
+          </button>
         </div>
       </div>
 
-      <div className="mb-4 mt-4">
-        <h2 className="text-xl font-semibold mb-2">Agregar Instrucción</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-white"
-            >
-              Nombre:
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={newInstruction.name}
-              onChange={handleInputChange}
-              className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
-            />
+      {showCreateTask && (
+        <div className="mb-4 mt-4">
+          <h2 className="text-xl font-semibold mb-2">Agregar Instrucción</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label
+                htmlFor="name"
+                className="block text-sm font-medium text-white"
+              >
+                Nombre:
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={newInstruction.name}
+                onChange={handleInputChange}
+                className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="size"
+                className="block text-sm font-medium text-white"
+              >
+                Tamaño:
+              </label>
+              <input
+                type="number"
+                id="size"
+                name="size"
+                value={newInstruction.size}
+                onChange={handleInputChange}
+                className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="time"
+                className="block text-sm font-medium text-white"
+              >
+                Tiempo:
+              </label>
+              <input
+                type="number"
+                id="time"
+                name="time"
+                value={newInstruction.time}
+                onChange={handleInputChange}
+                className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
+              />
+            </div>
           </div>
-          <div>
-            <label
-              htmlFor="size"
-              className="block text-sm font-medium text-white"
-            >
-              Tamaño:
-            </label>
-            <input
-              type="number"
-              id="size"
-              name="size"
-              value={newInstruction.size}
-              onChange={handleInputChange}
-              className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="time"
-              className="block text-sm font-medium text-white"
-            >
-              Tiempo:
-            </label>
-            <input
-              type="number"
-              id="time"
-              name="time"
-              value={newInstruction.time}
-              onChange={handleInputChange}
-              className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700 focus:ring focus:ring-blue-200 w-full"
-            />
-          </div>
+          <button
+            onClick={addInstruction}
+            className="px-4 py-2 mt-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring focus:ring-green-200"
+          >
+            Agregar
+          </button>
+          <button
+            onClick={addRandomInstruction}
+            className="px-4 py-2 mt-2 ml-4 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
+          >
+            Agregar Tarea Aleatoria
+          </button>
         </div>
-        <button
-          onClick={addInstruction}
-          className="px-4 py-2 mt-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring focus:ring-green-200"
-        >
-          Agregar
-        </button>
-      </div>
+      )}
 
       <div className="mb-4">
         <h2 className="text-xl font-semibold mb-2">Memoria</h2>
