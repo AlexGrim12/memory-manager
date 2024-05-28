@@ -3,7 +3,14 @@ import React, { useState, useEffect, useRef } from 'react'
 const MemorySimulator: React.FC = () => {
   const [memorySize, setMemorySize] = useState<number>(100)
   const [instructions, setInstructions] = useState<
-    { name: string; size: number; time: number; start: number; end: number }[]
+    {
+      name: string
+      size: number
+      time: number
+      start: number
+      end: number
+      memoryAddress: string // Dirección de memoria
+    }[]
   >([])
   const [waitingInstructions, setWaitingInstructions] = useState<
     { name: string; size: number; time: number }[]
@@ -30,7 +37,9 @@ const MemorySimulator: React.FC = () => {
     time: '',
   })
 
-  const [memoryState, setMemoryState] = useState<boolean[]>([])
+  const [memoryState, setMemoryState] = useState<
+    { occupied: boolean; instructionName: string | null }[]
+  >([])
 
   useEffect(() => {
     return () => {
@@ -41,7 +50,12 @@ const MemorySimulator: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    setMemoryState(Array(memorySize).fill(false))
+    // Inicializar el estado de la memoria con espacio libre
+    setMemoryState(
+      Array(memorySize)
+        .fill(null)
+        .map(() => ({ occupied: false, instructionName: null }))
+    )
   }, [memorySize])
 
   const handleInputChange = (
@@ -72,9 +86,19 @@ const MemorySimulator: React.FC = () => {
 
     if (start !== null) {
       const end = start + sizeInt
+      const memoryAddress = `0x${start.toString(16)} - 0x${(end - 1).toString(
+        16
+      )}` // Calcular dirección de memoria
       setInstructions([
         ...instructions,
-        { name, size: sizeInt, time: timeInt, start, end },
+        {
+          name,
+          size: sizeInt,
+          time: timeInt,
+          start,
+          end,
+          memoryAddress,
+        },
       ])
       setNewInstruction({ name: '', size: '', time: '' })
 
@@ -82,7 +106,7 @@ const MemorySimulator: React.FC = () => {
       setMemoryState((prevMemoryState) => {
         const updatedMemoryState = [...prevMemoryState]
         for (let i = start; i < end; i++) {
-          updatedMemoryState[i] = true
+          updatedMemoryState[i] = { occupied: true, instructionName: name }
         }
         return updatedMemoryState
       })
@@ -99,8 +123,7 @@ const MemorySimulator: React.FC = () => {
     let freeSpaceLength = 0
 
     for (let i = 0; i < memorySize; i++) {
-      if (memoryState[i] === false) {
-        // Revisar si el espacio está libre
+      if (!memoryState[i].occupied) {
         if (freeSpaceStart === null) {
           freeSpaceStart = i
         }
@@ -117,6 +140,16 @@ const MemorySimulator: React.FC = () => {
     return null
   }
 
+  const freeMemorySpace = (start: number, end: number): void => {
+    setMemoryState((prevMemoryState) => {
+      const updatedMemoryState = [...prevMemoryState]
+      for (let i = start; i < end; i++) {
+        updatedMemoryState[i] = { occupied: false, instructionName: null }
+      }
+      return updatedMemoryState
+    })
+  }
+
   const advanceTime = (): void => {
     const completedInstructions: {
       name: string
@@ -124,18 +157,23 @@ const MemorySimulator: React.FC = () => {
       time: number
       start: number
       end: number
+      memoryAddress: string
     }[] = []
 
     setInstructions((prevInstructions) => {
       const newInstructions = prevInstructions.map((instruction) => {
-        if (--instruction.time <= 0) {
-          completedInstructions.push(instruction) // Agrega la instrucción a la lista de completadas
-          return null // Devuelve null para eliminar la instrucción del arreglo
+        if (instruction.time > 0) {
+          instruction.time--
+          if (instruction.time <= 0) {
+            completedInstructions.push(instruction)
+            return null
+          }
+          return { ...instruction }
+        } else {
+          completedInstructions.push(instruction)
+          return null
         }
-        return { ...instruction, time: instruction.time }
       })
-
-      // Filtra las instrucciones null del arreglo
       return newInstructions.filter((instruction) => instruction !== null)
     })
 
@@ -144,13 +182,7 @@ const MemorySimulator: React.FC = () => {
       setCompletedTasksTotalSize((prev) => prev + instruction.size)
 
       // Liberar espacio en memoryState
-      setMemoryState((prevMemoryState) => {
-        const updatedMemoryState = [...prevMemoryState]
-        for (let i = instruction.start; i < instruction.end; i++) {
-          updatedMemoryState[i] = false
-        }
-        return updatedMemoryState
-      })
+      freeMemorySpace(instruction.start, instruction.end)
     })
 
     retryAddingInstructions()
@@ -190,17 +222,25 @@ const MemorySimulator: React.FC = () => {
       prevWaiting.forEach((instruction) => {
         const start = findMemorySpace(instruction.size)
         if (start !== null) {
+          const end = start + instruction.size
+          const memoryAddress = `0x${start.toString(16)} - 0x${(
+            end - 1
+          ).toString(16)}`
           newInstructions.push({
             ...instruction,
             start,
-            end: start + instruction.size,
+            end,
+            memoryAddress,
           })
 
           // Actualizar memoryState
           setMemoryState((prevMemoryState) => {
             const updatedMemoryState = [...prevMemoryState]
-            for (let i = start; i < start + instruction.size; i++) {
-              updatedMemoryState[i] = true
+            for (let i = start; i < end; i++) {
+              updatedMemoryState[i] = {
+                occupied: true,
+                instructionName: instruction.name,
+              }
             }
             return updatedMemoryState
           })
@@ -228,13 +268,7 @@ const MemorySimulator: React.FC = () => {
       setInstructions((prev) => prev.filter((_, i) => i !== index))
 
       // Liberar espacio en memoryState
-      setMemoryState((prevMemoryState) => {
-        const updatedMemoryState = [...prevMemoryState]
-        for (let i = removed.start; i < removed.end; i++) {
-          updatedMemoryState[i] = false
-        }
-        return updatedMemoryState
-      })
+      freeMemorySpace(removed.start, removed.end)
     }
   }
 
@@ -245,7 +279,11 @@ const MemorySimulator: React.FC = () => {
     setCurrentOccupancy(0)
     setCompletedTasksCount(0)
     setCompletedTasksTotalSize(0)
-    setMemoryState(Array(memorySize).fill(false))
+    setMemoryState(
+      Array(memorySize)
+        .fill(null)
+        .map(() => ({ occupied: false, instructionName: null }))
+    )
   }
 
   const getInstructionColor = (instructionName: string): string => {
@@ -282,23 +320,6 @@ const MemorySimulator: React.FC = () => {
             className="mt-1 p-2 border rounded-md shadow-sm bg-gray-700  focus:ring focus:ring-blue-200"
           />
         </div>
-        {/* <div className="flex items-center gap-4">
-          <label
-            htmlFor="simSize"
-            className="block text-sm font-medium text-white"
-          >
-            Tamaño de la simulación:
-          </label>
-          <input
-            type="number"
-            id="simSize"
-            value={simulationSize}
-            onChange={(e) =>
-              setSimulationSize(parseInt(e.target.value, 10) || 0)
-            }
-            className="mt-1 p-2 border rounded-md bg-gray-700 shadow-sm focus:ring focus:ring-blue-200"
-          />
-        </div> */}
         <div className="flex items-center gap-4">
           <button
             onClick={startSimulation}
@@ -384,29 +405,25 @@ const MemorySimulator: React.FC = () => {
       <div className="mb-4">
         <h2 className="text-xl font-semibold mb-2">Memoria</h2>
         <div className="grid grid-cols-10 gap-2">
-          {[...Array(memorySize)].map((_, index) => {
-            const instructionAtSlot = instructions.find(
-              (instr) => index >= instr.start && index < instr.end
-            )
-
-            return (
-              <div
-                key={index}
-                className="h-8 border"
-                style={{
-                  backgroundColor: instructionAtSlot
-                    ? getInstructionColor(instructionAtSlot.name)
-                    : '#081B37',
-                }}
-              >
-                {instructionAtSlot && index === instructionAtSlot.start && (
-                  <span className="absolute text-xs text-white font-bold">
-                    {instructionAtSlot.name}
-                  </span>
-                )}
-              </div>
-            )
-          })}
+          {memoryState.map((slot, index) => (
+            <div
+              key={index}
+              className="h-8 border relative"
+              style={{
+                backgroundColor: slot.occupied
+                  ? getInstructionColor(slot.instructionName || '')
+                  : '#081B37',
+              }}
+            >
+              {slot.occupied && (
+                <span className="absolute text-xs text-white font-bold">
+                  {slot.instructionName}
+                  <br />
+                  {`0x${index.toString(16)}`}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -425,7 +442,7 @@ const MemorySimulator: React.FC = () => {
                   , Tamaño: {instruction.size}, Tiempo: {instruction.time}
                 </span>
                 <span className="text-white">
-                  , Inicio: {instruction.start}, Fin: {instruction.end}
+                  , Dirección: {instruction.memoryAddress}
                 </span>
                 <button
                   onClick={() => removeInstruction(index)}
