@@ -115,7 +115,7 @@ const MemorySimulator: React.FC = () => {
     time: number
   } => {
     const randomName = `Tarea ${Math.floor(Math.random() * 1000)}`
-    const randomSize = Math.floor(Math.random() * (memorySize / 3)) + 1
+    const randomSize = Math.floor(Math.random() * memorySize) + 1
     const randomTime = Math.floor(Math.random() * 100) + 1
 
     return { name: randomName, size: randomSize, time: randomTime }
