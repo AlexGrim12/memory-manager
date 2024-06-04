@@ -34,10 +34,29 @@ const MemorySimulator: React.FC = () => {
     { occupied: boolean; instructionName: string | null }[]
   >([])
 
+  // Nuevo estado para las instrucciones añadidas durante la simulación
+  const [newInstructionsAdded, setNewInstructionsAdded] = useState<
+    {
+      name: string
+      size: number
+      time: number
+      start: number
+      end: number
+      memoryAddress: string
+    }[]
+  >([])
+
+  // Nuevo estado para controlar la simulación automática
+  const [autoSimulationRunning, setAutoSimulationRunning] = useState(false)
+  const autoSimulationTimer = useRef<NodeJS.Timeout | null>(null)
+
   useEffect(() => {
     return () => {
       if (animationTimer.current) {
         clearTimeout(animationTimer.current)
+      }
+      if (autoSimulationTimer.current) {
+        clearTimeout(autoSimulationTimer.current)
       }
     }
   }, [])
@@ -81,8 +100,10 @@ const MemorySimulator: React.FC = () => {
       const memoryAddress = `0x${start.toString(16)} - 0x${(end - 1).toString(
         16
       )}`
-      setInstructions([
-        ...instructions,
+
+      // Actualiza el estado instructions inmediatamente después de agregar la instrucción
+      setInstructions((prevInstructions) => [
+        ...prevInstructions,
         {
           name,
           size: sizeInt,
@@ -92,7 +113,6 @@ const MemorySimulator: React.FC = () => {
           memoryAddress,
         },
       ])
-      setNewInstruction({ name: '', size: '', time: '' })
 
       setMemoryState((prevMemoryState) => {
         const updatedMemoryState = [...prevMemoryState]
@@ -116,7 +136,7 @@ const MemorySimulator: React.FC = () => {
   } => {
     const randomName = `Tarea ${Math.floor(Math.random() * 1000)}`
     const randomSize = Math.floor(Math.random() * memorySize) + 1
-    const randomTime = Math.floor(Math.random() * 100) + 1
+    const randomTime = Math.floor(Math.random() * 50) * 2 + 2
 
     return { name: randomName, size: randomSize, time: randomTime }
   }
@@ -130,8 +150,9 @@ const MemorySimulator: React.FC = () => {
       const memoryAddress = `0x${start.toString(16)} - 0x${(end - 1).toString(
         16
       )}`
-      setInstructions([
-        ...instructions,
+      // Actualiza el estado instructions inmediatamente después de agregar la instrucción
+      setInstructions((prevInstructions) => [
+        ...prevInstructions,
         {
           ...newInstruction,
           start,
@@ -152,12 +173,6 @@ const MemorySimulator: React.FC = () => {
       })
     } else {
       setWaitingInstructions([...waitingInstructions, newInstruction])
-    }
-  }
-
-  const addMultipleRandomInstructions = (): void => {
-    for (let i = 0; i < 5; i++) {
-      addRandomInstruction()
     }
   }
 
@@ -204,32 +219,52 @@ const MemorySimulator: React.FC = () => {
     }[] = []
 
     setInstructions((prevInstructions) => {
-      const newInstructions = prevInstructions.map((instruction) => {
-        if (instruction.time > 0) {
-          instruction.time--
-          if (instruction.time <= 0) {
-            completedInstructions.push(instruction)
-            return null
+      console.log('Avanzando tiempo...')
+      console.log(
+        `todas las instrucciones: ${instructions
+          .map((instr) => instr.name)
+          .join(', ')}`
+      )
+
+      const newInstructions = prevInstructions
+        .map((instruction) => {
+          if (instruction.time > 0) {
+            instruction.time -= 1
+            if (instruction.time === 0) {
+              completedInstructions.push(instruction)
+            }
+            return { ...instruction }
           }
-          return { ...instruction }
-        } else {
-          completedInstructions.push(instruction)
-          return null
-        }
+          return instruction
+        })
+        .filter((instruction) => instruction.time > 0)
+
+      completedInstructions.forEach((instruction) => {
+        console.log(`Liberando espacio de memoria de ${instruction.name}.`)
+
+        setCompletedTasksCount((prev) => prev + 1)
+        setCompletedTasksTotalSize((prev) => prev + instruction.size)
+
+        freeMemorySpace(instruction.start, instruction.end)
       })
-      return newInstructions.filter((instruction) => instruction !== null)
+
+      // Agrega las nuevas instrucciones al estado principal
+      setInstructions((prevInstructions) => [
+        ...prevInstructions,
+        ...newInstructionsAdded,
+      ])
+
+      // Reinicia el estado de nuevas instrucciones
+      setNewInstructionsAdded([])
+
+      retryAddingInstructions()
+      updateOccupancy()
+      return newInstructions
     })
-
-    completedInstructions.forEach((instruction) => {
-      setCompletedTasksCount((prev) => prev + 1)
-      setCompletedTasksTotalSize((prev) => prev + instruction.size)
-
-      freeMemorySpace(instruction.start, instruction.end)
-    })
-
-    retryAddingInstructions()
-    updateOccupancy()
   }
+
+  // Cambios en el botón de inicio de simulación
+  const [isSimulationRunning, setIsSimulationRunning] = useState(false)
 
   const startSimulation = (): void => {
     setTimeStepsRemaining(simulationSize)
@@ -238,7 +273,15 @@ const MemorySimulator: React.FC = () => {
       clearTimeout(animationTimer.current)
     }
 
+    setIsSimulationRunning(true) // Activa el estado de ejecución
     animationTimer.current = setTimeout(runSimulationStep, 1000)
+  }
+
+  const stopSimulation = (): void => {
+    if (animationTimer.current) {
+      clearTimeout(animationTimer.current)
+    }
+    setIsSimulationRunning(false) // Desactiva el estado de ejecución
   }
 
   const runSimulationStep = (): void => {
@@ -253,7 +296,36 @@ const MemorySimulator: React.FC = () => {
       if (animationTimer.current) {
         clearTimeout(animationTimer.current)
       }
+      setIsSimulationRunning(false) // Desactiva el estado de ejecución cuando termina
     }
+  }
+
+  // // Función para iniciar la simulación automática
+  // const startAutoSimulation = (): void => {
+  //   setAutoSimulationRunning(true)
+  //   // autoSimulationTimer.current = setTimeout(runAutoSimulationStep, 3000)
+  // }
+
+  // // Función para detener la simulación automática
+  // const stopAutoSimulation = (): void => {
+  //   if (autoSimulationTimer.current) {
+  //     clearTimeout(autoSimulationTimer.current)
+  //   }
+  //   setAutoSimulationRunning(false)
+  // }
+
+  // Función para ejecutar un paso de la simulación automática
+  const runAutoSimulationStep = (): void => {
+    for (let i = 0; i < memorySize * 3; i++) {
+      addRandomInstruction()
+    }
+    retryAddingInstructions()
+    updateOccupancy()
+
+    // hacer que la simulación automática se ejecute cada 3 segundos
+    // if (autoSimulationRunning) {
+    autoSimulationTimer.current = setTimeout(runAutoSimulationStep, 3000)
+    // }
   }
 
   const retryAddingInstructions = (): void => {
@@ -302,6 +374,14 @@ const MemorySimulator: React.FC = () => {
   }
 
   const removeInstruction = (index: number): void => {
+    console.log(`Eliminando instrucción ${instructions[index].name}.`)
+    console.log(
+      `Las tareas restantes en memoria son: ${instructions
+        .filter((_, i) => i !== index)
+        .map((instr) => instr.name)
+        .join(', ')}`
+    )
+
     const removed = instructions[index]
     if (removed) {
       setCompletedTasksCount((prev) => prev + 1)
@@ -351,21 +431,6 @@ const MemorySimulator: React.FC = () => {
     time: '',
   })
 
-  // Timer para agregar tareas aleatorias
-  const taskTimer = useRef<NodeJS.Timeout | null>(null)
-  const startAddingTasks = (): void => {
-    if (taskTimer.current) {
-      clearInterval(taskTimer.current)
-    }
-    taskTimer.current = setInterval(addMultipleRandomInstructions, 1000)
-  }
-
-  const stopAddingTasks = (): void => {
-    if (taskTimer.current) {
-      clearInterval(taskTimer.current)
-    }
-  }
-
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-4">Simulador de Memoria</h1>
@@ -387,11 +452,12 @@ const MemorySimulator: React.FC = () => {
           />
         </div>
         <div className="flex items-center gap-4">
+          {/* Botón "Iniciar Simulación" con estado */}
           <button
-            onClick={startSimulation}
+            onClick={isSimulationRunning ? stopSimulation : startSimulation}
             className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring focus:ring-blue-200"
           >
-            Iniciar Simulación
+            {isSimulationRunning ? 'Detener Simulación' : 'Iniciar Simulación'}
           </button>
           <button
             onClick={advanceTime}
@@ -411,19 +477,16 @@ const MemorySimulator: React.FC = () => {
           >
             {showCreateTask ? 'Ocultar Crear Tarea' : 'Crear Tarea'}
           </button>
-          {/* Botón para agregar 5 tareas aleatorias por segundo */}
           <button
-            onClick={startAddingTasks}
-            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 focus:outline-none focus:ring focus:ring-yellow-200"
+            onClick={
+              runAutoSimulationStep
+              // ? stopAutoSimulation : startAutoSimulation
+            }
+            className="px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 focus:outline-none focus:ring focus:ring-purple-200"
           >
-            Agregar 5 Tareas/Segundo
-          </button>
-          {/* Botón para detener el flujo de tareas */}
-          <button
-            onClick={stopAddingTasks}
-            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring focus:ring-red-200"
-          >
-            Detener Tareas
+            {autoSimulationRunning
+              ? 'Detener Simulación Automática'
+              : 'Simulación Automática'}
           </button>
         </div>
       </div>
